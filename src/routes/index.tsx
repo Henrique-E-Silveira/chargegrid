@@ -281,15 +281,27 @@ function Dashboard() {
     [],
   );
 
-  const demandData = useMemo(
-    () =>
-      baseDemandData.map((point, index) =>
-        index === baseDemandData.length - 1
-          ? { time: latestDemandLabel, power: Number(totalPowerKw.toFixed(1)) }
-          : point,
-      ),
-    [latestDemandLabel, totalPowerKw],
-  );
+  const [demandData, setDemandData] = useState(baseDemandData);
+
+  useEffect(() => {
+    const tick = () => {
+      const stamp = new Date().toLocaleTimeString("pt-BR", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
+      const jitter = (Math.random() - 0.5) * 4;
+      const value = Math.max(
+        0,
+        Number(((totalPowerKw || 18 + Math.random() * 18) + jitter).toFixed(1)),
+      );
+      setDemandData((prev) => [...prev.slice(1), { time: stamp, power: value }]);
+    };
+    tick();
+    const id = window.setInterval(tick, 3000);
+    return () => window.clearInterval(id);
+  }, [totalPowerKw]);
+
 
   const startCharger = (id: string) => {
     const timestamp = Date.now();
