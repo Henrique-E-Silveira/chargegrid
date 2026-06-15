@@ -65,7 +65,7 @@ type Charger = {
 
 const NETWORK_LIMIT_KW = 44;
 const CHARGER_POWER_KW = 11;
-const SIMULATION_SPEED = 60;
+const SIMULATION_SPEED = 1;
 const CO2_KG_PER_KWH = 0.42;
 const CLEAN_KM_PER_KWH = 20;
 const FOSSIL_SAVINGS_PER_KWH = 8.4;
