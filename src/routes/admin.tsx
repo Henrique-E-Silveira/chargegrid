@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Activity,
@@ -9,9 +9,16 @@ import {
   DollarSign,
   Gauge,
   Leaf,
+  Lock,
+  LogOut,
+  MapPin,
+  Pencil,
   Play,
   Power,
   Radio,
+  Trash2,
+  Unlock,
+  Users,
   Zap,
   type LucideIcon,
 } from "lucide-react";
@@ -30,6 +37,24 @@ import {
 } from "recharts";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { deleteUser, signOut, updateUser, useSession, useUsers } from "@/lib/auth";
+import {
+  CHARGER_POWER_KW,
+  CLEAN_KM_PER_KWH,
+  CO2_KG_PER_KWH,
+  FOSSIL_SAVINGS_PER_KWH,
+  NETWORK_LIMIT_KW,
+  formatDecimal,
+  formatDuration,
+  formatMoney,
+  sessionMetrics,
+  setStationBlocked,
+  startSession,
+  stopSession,
+  tariffAt,
+  useGrid,
+  type Charger,
+} from "@/lib/grid";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
@@ -44,78 +69,12 @@ export const Route = createFileRoute("/admin")({
         property: "og:description",
         content: "Sistema inteligente de gestão de eletropostos — FIAP × GoodWe 2026.",
       },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: Dashboard,
 });
-
-type Status = "Carregando" | "Disponível" | "Aguardando";
-type TariffTone = "peak" | "mid" | "off";
-type Charger = {
-  id: string;
-  status: Status;
-  vehicle: string;
-  user: string;
-  power: number;
-  baseKwh: number;
-  baseCost: number;
-  elapsedSeedSeconds: number;
-  sessionStartedAt: number | null;
-};
-
-const NETWORK_LIMIT_KW = 44;
-const CHARGER_POWER_KW = 11;
-const SIMULATION_SPEED = 1;
-const CO2_KG_PER_KWH = 0.42;
-const CLEAN_KM_PER_KWH = 20;
-const FOSSIL_SAVINGS_PER_KWH = 8.4;
-
-const initialChargers: Charger[] = [
-  {
-    id: "CP-01",
-    status: "Carregando",
-    vehicle: "Tesla Model 3",
-    user: "USR-4821",
-    power: CHARGER_POWER_KW,
-    baseKwh: 18.45,
-    baseCost: 15.68,
-    elapsedSeedSeconds: 5075,
-    sessionStartedAt: null,
-  },
-  {
-    id: "CP-02",
-    status: "Carregando",
-    vehicle: "BYD Dolphin",
-    user: "USR-3392",
-    power: CHARGER_POWER_KW,
-    baseKwh: 8.2,
-    baseCost: 6.97,
-    elapsedSeedSeconds: 2838,
-    sessionStartedAt: null,
-  },
-  {
-    id: "CP-03",
-    status: "Disponível",
-    vehicle: "—",
-    user: "—",
-    power: 0,
-    baseKwh: 0,
-    baseCost: 0,
-    elapsedSeedSeconds: 0,
-    sessionStartedAt: null,
-  },
-  {
-    id: "CP-04",
-    status: "Aguardando",
-    vehicle: "Hyundai Ioniq 5",
-    user: "USR-7741",
-    power: 0,
-    baseKwh: 0,
-    baseCost: 0,
-    elapsedSeedSeconds: 0,
-    sessionStartedAt: null,
-  },
-];
 
 const powers = [
   18, 21, 19, 25, 28, 24, 30, 32, 27, 34, 37, 33, 29, 31, 35, 39, 36, 32, 28, 26, 30, 34, 38, 35,
@@ -125,64 +84,6 @@ const baseDemandData = powers.map((power, i) => ({
   time: `${String(14 + Math.floor(i / 6)).padStart(2, "0")}:${String((i % 6) * 10).padStart(2, "0")}`,
   power,
 }));
-const sessions = [
-  ["CP-01", "Tesla Model 3", "32,40", "2h58min", "Intermediário", "27,54", "14:22:10"],
-  ["CP-02", "BYD Dolphin", "18,70", "1h42min", "Fora de Pico", "10,29", "12:15:44"],
-  ["CP-03", "Chevrolet Bolt", "45,00", "4h05min", "Pico", "54,00", "21:08:33"],
-  ["CP-01", "Renault Zoe", "22,10", "2h00min", "Intermediário", "18,79", "10:30:20"],
-  ["CP-04", "Nissan Leaf", "28,60", "2h36min", "Fora de Pico", "15,73", "06:55:02"],
-];
-
-function tariffAt(hour: number): { label: string; price: string; rate: number; tone: TariffTone } {
-  if (hour >= 18 && hour <= 20)
-    return { label: "Horário de Pico", price: "R$ 1,20/kWh", rate: 1.2, tone: "peak" };
-  if ((hour >= 7 && hour <= 17) || hour === 21)
-    return { label: "Horário Intermediário", price: "R$ 0,85/kWh", rate: 0.85, tone: "mid" };
-  return { label: "Fora de Pico", price: "R$ 0,55/kWh", rate: 0.55, tone: "off" };
-}
-
-function formatDecimal(value: number, digits = 1) {
-  return value.toFixed(digits).replace(".", ",");
-}
-
-function formatMoney(value: number) {
-  return `R$ ${formatDecimal(value, 2)}`;
-}
-
-function formatDuration(totalSeconds: number) {
-  const seconds = Math.max(0, Math.floor(totalSeconds));
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = seconds % 60;
-  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
-}
-
-function liveElapsedSeconds(charger: Charger, now: Date | null) {
-  if (charger.status !== "Carregando") return 0;
-  if (!now || !charger.sessionStartedAt) return charger.elapsedSeedSeconds;
-  return (
-    charger.elapsedSeedSeconds +
-    ((now.getTime() - charger.sessionStartedAt) / 1000) * SIMULATION_SPEED
-  );
-}
-
-function liveSessionMetrics(charger: Charger, now: Date | null, rate: number) {
-  if (charger.status !== "Carregando") {
-    return { kwh: 0, cost: 0, elapsedSeconds: 0 };
-  }
-
-  const liveSeconds =
-    charger.sessionStartedAt && now
-      ? ((now.getTime() - charger.sessionStartedAt) / 1000) * SIMULATION_SPEED
-      : 0;
-  const liveKwh = (charger.power * liveSeconds) / 3600;
-
-  return {
-    kwh: charger.baseKwh + liveKwh,
-    cost: charger.baseCost + liveKwh * rate,
-    elapsedSeconds: liveElapsedSeconds(charger, now),
-  };
-}
 
 function Panel({ children, className }: { children: ReactNode; className?: string }) {
   return (
@@ -213,38 +114,38 @@ function Title({
 }
 
 function Dashboard() {
+  const navigate = useNavigate();
+  const { session, ready } = useSession();
   const [now, setNow] = useState<Date | null>(null);
-  const [chargers, setChargers] = useState(initialChargers);
-  const [realizedRevenue, setRealizedRevenue] = useState(25.15);
-  const [realizedEnergy, setRealizedEnergy] = useState(2.87);
-  const [completedSessions, setCompletedSessions] = useState(16);
+  const { grid } = useGrid();
 
   useEffect(() => {
-    const firstTick = new Date();
-    setNow(firstTick);
-    setChargers((items) =>
-      items.map((cp) =>
-        cp.status === "Carregando" && !cp.sessionStartedAt
-          ? { ...cp, sessionStartedAt: firstTick.getTime() }
-          : cp,
-      ),
-    );
+    if (ready && (!session || session.role !== "admin")) navigate({ to: "/" });
+  }, [ready, session, navigate]);
+
+  useEffect(() => {
+    setNow(new Date());
     const timer = window.setInterval(() => setNow(new Date()), 1000);
     return () => window.clearInterval(timer);
   }, []);
 
   const hour = now?.getHours() ?? 12;
   const tariff = tariffAt(hour);
+  const nowMs = now?.getTime() ?? null;
+
+  const chargers = grid.chargers;
   const activeCount = chargers.filter((cp) => cp.status === "Carregando").length;
   const totalPowerKw = chargers.reduce(
     (sum, cp) => sum + (cp.status === "Carregando" ? cp.power : 0),
     0,
   );
-  const activeMetrics = chargers.map((cp) => liveSessionMetrics(cp, now, tariff.rate));
-  const activeRevenue = activeMetrics.reduce((sum, item) => sum + item.cost, 0);
-  const activeEnergy = activeMetrics.reduce((sum, item) => sum + item.kwh, 0);
-  const totalRevenue = realizedRevenue + activeRevenue;
-  const totalEnergy = realizedEnergy + activeEnergy;
+  const liveEnergy = chargers.reduce((sum, cp) => sum + sessionMetrics(cp, nowMs).kwh, 0);
+  const liveRevenue = liveEnergy * tariff.rate;
+  const historyEnergy = grid.history.reduce((sum, item) => sum + item.kwh, 0);
+  const historyRevenue = grid.history.reduce((sum, item) => sum + item.cost, 0);
+  const totalRevenue = historyRevenue + liveRevenue;
+  const totalEnergy = historyEnergy + liveEnergy;
+
   const networkLoad = Math.min(100, (totalPowerKw / NETWORK_LIMIT_KW) * 100);
   const networkTone = networkLoad >= 85 ? "critical" : networkLoad >= 60 ? "attention" : "stable";
   const networkLabel =
@@ -267,9 +168,6 @@ function Dashboard() {
       : networkTone === "attention"
         ? "var(--chart-orange)"
         : "var(--chart-green)";
-  const latestDemandLabel = now
-    ? now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
-    : "Agora";
 
   const tariffData = useMemo(
     () =>
@@ -291,66 +189,13 @@ function Dashboard() {
         second: "2-digit",
       });
       const jitter = (Math.random() - 0.5) * 4;
-      const value = Math.max(
-        0,
-        Number(((totalPowerKw || 18 + Math.random() * 18) + jitter).toFixed(1)),
-      );
+      const value = Math.max(0, Number((totalPowerKw + jitter).toFixed(1)));
       setDemandData((prev) => [...prev.slice(1), { time: stamp, power: value }]);
     };
     tick();
     const id = window.setInterval(tick, 3000);
     return () => window.clearInterval(id);
   }, [totalPowerKw]);
-
-
-  const startCharger = (id: string) => {
-    const timestamp = Date.now();
-    setChargers((items) =>
-      items.map((cp) =>
-        cp.id !== id
-          ? cp
-          : {
-              ...cp,
-              status: "Carregando",
-              vehicle: cp.vehicle === "—" ? "VW ID.4" : cp.vehicle,
-              user: cp.user === "—" ? `USR-${6108 + Number(cp.id.slice(-2))}` : cp.user,
-              power: CHARGER_POWER_KW,
-              baseKwh: 0,
-              baseCost: 0,
-              elapsedSeedSeconds: 0,
-              sessionStartedAt: timestamp,
-            },
-      ),
-    );
-  };
-
-  const stopCharger = (id: string) => {
-    const timestamp = new Date();
-    const charger = chargers.find((cp) => cp.id === id);
-    if (charger?.status === "Carregando") {
-      const metrics = liveSessionMetrics(charger, timestamp, tariff.rate);
-      setRealizedRevenue((value) => value + metrics.cost);
-      setRealizedEnergy((value) => value + metrics.kwh);
-      setCompletedSessions((value) => value + 1);
-    }
-    setChargers((items) =>
-      items.map((cp) =>
-        cp.id !== id
-          ? cp
-          : {
-              ...cp,
-              status: "Disponível",
-              vehicle: "—",
-              user: "—",
-              power: 0,
-              baseKwh: 0,
-              baseCost: 0,
-              elapsedSeedSeconds: 0,
-              sessionStartedAt: null,
-            },
-      ),
-    );
-  };
 
   const badgeTone =
     tariff.tone === "peak"
@@ -406,12 +251,17 @@ function Dashboard() {
       icon: DollarSign,
     },
     {
-      value: String(completedSessions + activeCount),
+      value: String(grid.history.length + activeCount),
       label: "Recargas Sustentáveis Realizadas",
       color: "text-violet",
       icon: BatteryCharging,
     },
   ];
+
+  const handleSignOut = () => {
+    signOut();
+    navigate({ to: "/", replace: true });
+  };
 
   return (
     <div className="grid-surface min-h-screen bg-background text-foreground">
@@ -440,10 +290,14 @@ function Dashboard() {
               <DollarSign size={15} />
               {tariff.label} — {tariff.price}
             </div>
-            <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 font-display text-xs font-semibold sm:text-sm">
+            <div className="hidden items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 font-display text-xs font-semibold sm:flex sm:text-sm">
               <Clock3 size={15} className="text-muted-foreground" />
               {now ? now.toLocaleTimeString("pt-BR") : "--:--:--"}
             </div>
+            <Button variant="outline" size="sm" onClick={handleSignOut}>
+              <LogOut size={15} />
+              Sair
+            </Button>
           </div>
         </div>
       </header>
@@ -489,7 +343,7 @@ function Dashboard() {
                     interval={5}
                   />
                   <YAxis
-                    domain={[0, 50]}
+                    domain={[0, NETWORK_LIMIT_KW + 10]}
                     unit=" kW"
                     tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
                     tickLine={false}
@@ -582,29 +436,68 @@ function Dashboard() {
             </div>
           </Panel>
         </section>
-        <section>
-          <div className="mb-3 flex items-center gap-2">
-            <Power size={19} className="text-primary" />
-            <h2 className="font-display text-base font-semibold sm:text-lg">
-              Pontos de Carregamento <span className="text-muted-foreground">(Charge Points)</span>
-            </h2>
-            <span className="ml-auto hidden items-center gap-1.5 text-xs text-success sm:flex">
-              <Radio size={13} className="animate-pulse" /> OCPP conectado
-            </span>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {chargers.map((cp) => (
-              <ChargerCard
-                key={cp.id}
-                charger={cp}
-                now={now}
-                rate={tariff.rate}
-                onStart={() => startCharger(cp.id)}
-                onStop={() => stopCharger(cp.id)}
-              />
-            ))}
-          </div>
-        </section>
+
+        {grid.stations.map((station) => {
+          const stationChargers = chargers.filter((cp) => cp.stationId === station.id);
+          const stationActive = stationChargers.filter((cp) => cp.status === "Carregando").length;
+          return (
+            <section key={station.id}>
+              <div className="mb-3 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+                <div className="min-w-0">
+                  <h2 className="flex min-w-0 items-center gap-2 font-display text-base font-semibold sm:text-lg">
+                    <MapPin size={18} className="shrink-0 text-primary" />
+                    <span className="truncate">{station.name}</span>
+                    <span
+                      className={cn(
+                        "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+                        station.blocked
+                          ? "border-primary/40 bg-primary/10 text-primary"
+                          : "border-success/40 bg-success/10 text-success",
+                      )}
+                    >
+                      {station.blocked ? "Bloqueado" : "Liberado"}
+                    </span>
+                  </h2>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {station.address} · {stationActive}/{stationChargers.length} em uso
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className="hidden items-center gap-1.5 text-xs text-success sm:flex">
+                    <Radio size={13} className="animate-pulse" /> OCPP
+                  </span>
+                  <Button
+                    variant={station.blocked ? "charge" : "stop"}
+                    size="sm"
+                    onClick={() => setStationBlocked(station.id, !station.blocked)}
+                  >
+                    {station.blocked ? <Unlock size={14} /> : <Lock size={14} />}
+                    {station.blocked ? "Liberar posto" : "Bloquear posto"}
+                  </Button>
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {stationChargers.map((cp) => (
+                  <ChargerCard
+                    key={cp.id}
+                    charger={cp}
+                    nowMs={nowMs}
+                    rate={tariff.rate}
+                    blocked={station.blocked}
+                    onStart={() =>
+                      startSession(cp.id, {
+                        driver: "Operador",
+                        vehicle: "Veículo do pátio",
+                      })
+                    }
+                    onStop={() => stopSession(cp.id, tariff.label, tariff.rate)}
+                  />
+                ))}
+              </div>
+            </section>
+          );
+        })}
+
         <section className="grid gap-5 xl:grid-cols-5">
           <Panel className="min-w-0 xl:col-span-2">
             <Title icon={DollarSign}>Tarifação Dinâmica ANEEL</Title>
@@ -679,58 +572,73 @@ function Dashboard() {
             </div>
           </Panel>
           <Panel className="min-w-0 overflow-hidden xl:col-span-3">
-            <Title icon={Clock3} detail="Últimas sessões encerradas">
+            <Title icon={Clock3} detail={`${grid.history.length} sessões encerradas`}>
               Histórico de Sessões
             </Title>
             <div className="max-h-[340px] overflow-auto">
-              <table className="w-full min-w-[760px] text-left text-xs">
-                <thead className="sticky top-0 z-10 bg-primary text-primary-foreground">
-                  <tr>
-                    {[
-                      "CP",
-                      "Veículo",
-                      "kWh",
-                      "Duração",
-                      "Tarifa",
-                      "Custo (R$)",
-                      "Encerrado em",
-                    ].map((h) => (
-                      <th key={h} className="px-4 py-3 font-semibold">
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {sessions.map((row, i) => (
-                    <tr
-                      key={`${row[0]}-${row[6]}`}
-                      className={cn(
-                        "border-b border-border",
-                        i % 2 ? "bg-panel-raised/60" : "bg-card",
-                      )}
-                    >
-                      {row.map((cell, j) => (
-                        <td
-                          key={j}
-                          className={cn(
-                            "px-4 py-3",
-                            j === 0
-                              ? "font-display font-semibold text-primary"
-                              : "text-muted-foreground",
-                            j === 5 && "font-semibold text-foreground",
-                          )}
-                        >
-                          {cell}
-                        </td>
+              {grid.history.length === 0 ? (
+                <p className="p-6 text-center text-xs text-muted-foreground">
+                  Nenhuma sessão encerrada ainda. As recargas concluídas por motoristas e operadores
+                  aparecem aqui automaticamente.
+                </p>
+              ) : (
+                <table className="w-full min-w-[820px] text-left text-xs">
+                  <thead className="sticky top-0 z-10 bg-primary text-primary-foreground">
+                    <tr>
+                      {[
+                        "CP",
+                        "Motorista",
+                        "Veículo",
+                        "kWh",
+                        "Duração",
+                        "Tarifa",
+                        "Custo (R$)",
+                        "Encerrado em",
+                      ].map((h) => (
+                        <th key={h} className="px-4 py-3 font-semibold">
+                          {h}
+                        </th>
                       ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {grid.history.map((row, i) => (
+                      <tr
+                        key={row.id}
+                        className={cn(
+                          "border-b border-border",
+                          i % 2 ? "bg-panel-raised/60" : "bg-card",
+                        )}
+                      >
+                        <td className="px-4 py-3 font-display font-semibold text-primary">
+                          {row.chargerId}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground">{row.driver}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{row.vehicle}</td>
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {formatDecimal(row.kwh, 2)}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {formatDuration(row.seconds)}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground">{row.tariff}</td>
+                        <td className="px-4 py-3 font-semibold text-foreground">
+                          {formatDecimal(row.cost, 2)}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {new Date(row.endedAt).toLocaleTimeString("pt-BR")}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </Panel>
         </section>
+
+        <AccountsPanel />
+
         <Panel>
           <Title icon={Leaf} detail="Consolidado do mês">
             Impacto Ambiental — Recargas Realizadas
@@ -753,29 +661,169 @@ function Dashboard() {
   );
 }
 
+function AccountsPanel() {
+  const users = useUsers();
+  const [editing, setEditing] = useState<string | null>(null);
+  const [form, setForm] = useState({ name: "", car: "", login: "", password: "" });
+  const [error, setError] = useState("");
+
+  const startEdit = (login: string) => {
+    const user = users.find((u) => u.login === login);
+    if (!user) return;
+    setEditing(login);
+    setError("");
+    setForm({ name: user.name, car: user.car, login: user.login, password: "" });
+  };
+
+  const save = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!editing) return;
+    const result = updateUser(editing, form);
+    if (result) {
+      setError(result.error);
+      return;
+    }
+    setEditing(null);
+    setError("");
+  };
+
+  const inputClass =
+    "w-full rounded-lg border border-border bg-background/60 px-3 py-2 text-sm outline-none focus:border-primary/60";
+
+  return (
+    <Panel className="overflow-hidden">
+      <Title icon={Users} detail={`${users.length} conta(s) de motorista`}>
+        Contas Cadastradas
+      </Title>
+      {users.length === 0 ? (
+        <p className="p-6 text-center text-xs text-muted-foreground">
+          Nenhuma conta de motorista cadastrada até o momento.
+        </p>
+      ) : (
+        <div className="overflow-auto">
+          <table className="w-full min-w-[640px] text-left text-xs">
+            <thead className="bg-panel-raised/70 text-muted-foreground">
+              <tr>
+                {["Nome", "Carro", "Login", "Ações"].map((h) => (
+                  <th key={h} className="px-4 py-3 font-semibold">
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {users.map((user, i) => (
+                <tr
+                  key={user.login}
+                  className={cn("border-b border-border", i % 2 ? "bg-panel-raised/40" : "bg-card")}
+                >
+                  <td className="px-4 py-3 font-medium">{user.name}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{user.car}</td>
+                  <td className="px-4 py-3 font-mono text-[11px]">{user.login}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => startEdit(user.login)}>
+                        <Pencil size={13} /> Editar
+                      </Button>
+                      <Button
+                        variant="stop"
+                        size="sm"
+                        onClick={() => {
+                          if (editing === user.login) setEditing(null);
+                          deleteUser(user.login);
+                        }}
+                      >
+                        <Trash2 size={13} /> Excluir
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {editing && (
+        <form className="space-y-3 border-t border-border p-5" onSubmit={save}>
+          <p className="font-display text-sm font-semibold">Editando conta “{editing}”</p>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <input
+              className={inputClass}
+              placeholder="Nome"
+              value={form.name}
+              maxLength={80}
+              onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+            />
+            <input
+              className={inputClass}
+              placeholder="Carro"
+              value={form.car}
+              maxLength={60}
+              onChange={(e) => setForm((prev) => ({ ...prev, car: e.target.value }))}
+            />
+            <input
+              className={inputClass}
+              placeholder="Login"
+              value={form.login}
+              maxLength={40}
+              onChange={(e) => setForm((prev) => ({ ...prev, login: e.target.value }))}
+            />
+            <input
+              className={inputClass}
+              type="password"
+              placeholder="Nova senha (opcional)"
+              value={form.password}
+              maxLength={64}
+              onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
+            />
+          </div>
+          {error && (
+            <p className="rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-xs font-medium text-primary">
+              {error}
+            </p>
+          )}
+          <div className="flex gap-2">
+            <Button type="submit" size="sm">
+              Salvar alterações
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => setEditing(null)}>
+              Cancelar
+            </Button>
+          </div>
+        </form>
+      )}
+    </Panel>
+  );
+}
+
 function ChargerCard({
   charger,
-  now,
+  nowMs,
   rate,
+  blocked,
   onStart,
   onStop,
 }: {
   charger: Charger;
-  now: Date | null;
+  nowMs: number | null;
   rate: number;
+  blocked: boolean;
   onStart: () => void;
   onStop: () => void;
 }) {
   const charging = charger.status === "Carregando";
   const waiting = charger.status === "Aguardando";
-  const metrics = liveSessionMetrics(charger, now, rate);
+  const metrics = sessionMetrics(charger, nowMs);
   const kwhLabel = charging ? formatDecimal(metrics.kwh, 2) : "—";
-  const costLabel = charging ? formatDecimal(metrics.cost, 2) : "—";
+  const costLabel = charging ? formatDecimal(metrics.kwh * rate, 2) : "—";
   const durationLabel = charging
-    ? formatDuration(metrics.elapsedSeconds)
+    ? formatDuration(metrics.seconds)
     : waiting
       ? "Na fila"
-      : "—";
+      : blocked
+        ? "Bloqueado"
+        : "—";
 
   return (
     <Panel
@@ -783,6 +831,7 @@ function ChargerCard({
         "overflow-hidden transition-colors",
         charging && "border-success/35",
         waiting && "border-warning/35",
+        blocked && "opacity-70",
       )}
     >
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-border bg-panel-raised/50 px-4 py-3">
@@ -798,22 +847,27 @@ function ChargerCard({
         <span
           className={cn(
             "rounded-full border px-2 py-1 text-[10px] font-semibold",
-            charging
-              ? "border-success/35 bg-success/10 text-success"
-              : waiting
-                ? "border-warning/35 bg-warning/10 text-warning"
-                : "border-border bg-muted text-muted-foreground",
+            blocked
+              ? "border-primary/35 bg-primary/10 text-primary"
+              : charging
+                ? "border-success/35 bg-success/10 text-success"
+                : waiting
+                  ? "border-warning/35 bg-warning/10 text-warning"
+                  : "border-border bg-muted text-muted-foreground",
           )}
         >
-          {charger.status}
+          {blocked ? "Bloqueado" : charger.status}
         </span>
       </div>
       <div className="space-y-3 p-4">
         <div className="grid grid-cols-[70px_minmax(0,1fr)] gap-y-2 text-xs">
           <span className="text-muted-foreground">Veículo</span>
           <span className="truncate font-medium">{charger.vehicle}</span>
-          <span className="text-muted-foreground">Usuário</span>
-          <span className="font-mono text-[11px]">{charger.user}</span>
+          <span className="text-muted-foreground">Motorista</span>
+          <span className="truncate text-[11px]">
+            {charger.driver}
+            {charger.plate ? ` · ${charger.plate}` : ""}
+          </span>
         </div>
         <div>
           <div className="mb-1.5 flex justify-between text-xs">
@@ -852,7 +906,7 @@ function ChargerCard({
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2 pt-1">
-          <Button variant="charge" size="sm" disabled={charging} onClick={onStart}>
+          <Button variant="charge" size="sm" disabled={charging || blocked} onClick={onStart}>
             <Play size={13} fill="currentColor" />
             Iniciar
           </Button>
