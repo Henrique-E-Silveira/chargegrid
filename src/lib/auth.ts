@@ -91,7 +91,7 @@ export function signUp(data: {
     password: data.password,
     role: "user",
   };
-  writeUsers([...users, user]);
+  commitUsers([...users, user]);
   const session = toSession(user);
   setSession(session);
   return session;
