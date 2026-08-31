@@ -101,6 +101,72 @@ export function signOut() {
   setSession(null);
 }
 
+export type ManagedUser = Session & { password: string };
+
+const USERS_EVENT = "chargegrid-users";
+
+export function listUsers(): ManagedUser[] {
+  return readUsers();
+}
+
+function commitUsers(users: StoredUser[]) {
+  writeUsers(users);
+  window.dispatchEvent(new Event(USERS_EVENT));
+}
+
+export function updateUser(
+  login: string,
+  data: { name: string; car: string; login: string; password?: string },
+): { error: string } | null {
+  const users = readUsers();
+  const index = users.findIndex((u) => u.login.toLowerCase() === login.toLowerCase());
+  if (index < 0) return { error: "Conta não encontrada." };
+  const nextLogin = data.login.trim();
+  if (!data.name.trim() || !data.car.trim() || !nextLogin) {
+    return { error: "Preencha nome, carro e login." };
+  }
+  if (
+    nextLogin.toLowerCase() === ADMIN.login.toLowerCase() ||
+    users.some((u, i) => i !== index && u.login.toLowerCase() === nextLogin.toLowerCase())
+  ) {
+    return { error: "Este login já está em uso." };
+  }
+  if (data.password && data.password.length < 6) {
+    return { error: "A senha deve ter no mínimo 6 caracteres." };
+  }
+  users[index] = {
+    ...users[index],
+    name: data.name.trim(),
+    car: data.car.trim(),
+    login: nextLogin,
+    password: data.password ? data.password : users[index].password,
+  };
+  commitUsers(users);
+  return null;
+}
+
+export function deleteUser(login: string) {
+  commitUsers(readUsers().filter((u) => u.login.toLowerCase() !== login.toLowerCase()));
+}
+
+export function useUsers() {
+  const [users, setUsers] = useState<ManagedUser[]>([]);
+
+  useEffect(() => {
+    const sync = () => setUsers(readUsers());
+    sync();
+    window.addEventListener(USERS_EVENT, sync);
+    window.addEventListener("storage", sync);
+    return () => {
+      window.removeEventListener(USERS_EVENT, sync);
+      window.removeEventListener("storage", sync);
+    };
+  }, []);
+
+  return users;
+}
+
+
 export function useSession() {
   const [session, setLocalSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
