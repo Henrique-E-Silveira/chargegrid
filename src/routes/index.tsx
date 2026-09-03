@@ -155,10 +155,22 @@ function AuthPage() {
             </Button>
           </form>
 
+          <div className="mt-4 border-t border-border pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() => navigate({ to: "/motorista" })}
+            >
+              Entrar como motorista (sem login)
+            </Button>
+          </div>
+
           <p className="mt-4 text-center text-[11px] leading-relaxed text-muted-foreground">
             Motoristas acessam o painel pessoal de recargas. Operadores acessam o centro de controle
             da rede.
           </p>
+
         </section>
       </div>
     </div>
