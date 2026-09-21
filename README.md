@@ -49,7 +49,7 @@ A rede simulada tem dois eletropostos, cada um com quatro pontos de recarga:
 
 ### 4.1 Diagrama de blocos
 
-![Diagrama de blocos](docs/diagramas/diagrama-blocos.png)
+![Diagrama de blocos](docs/diagrama-blocos.png)
 
 | Bloco | Função |
 |---|---|
@@ -78,19 +78,19 @@ flowchart TD
 
 **Tela do motorista – escolha do ponto de recarga**
 
-![Seleção de ponto](docs/prints/motorista-1-selecao-de-ponto.png)
+![Seleção de ponto](docs/motorista-1-selecao-de-ponto.png)
 
 **Tela do motorista – dados do motorista e do veículo**
 
-![Dados e veículo](docs/prints/motorista-2-dados-e-veiculo.png)
+![Dados e veículo](docs/motorista-2-dados-e-veiculo.png)
 
 **Tela do motorista – recarga em andamento**
 
-![Recarga em andamento](docs/prints/motorista-3-recarga-em-andamento.png)
+![Recarga em andamento](docs/motorista-3-recarga-em-andamento.png)
 
 **Dashboard do operador – tarifas por hora, recargas realizadas e impacto ambiental**
 
-![Dashboard do operador](docs/prints/operador-tarifas-historico-impacto.png)
+![Dashboard do operador](docs/operador-tarifas-historico-impacto.png)
 
 ## 5. Justificativa técnica das escolhas
 
@@ -190,9 +190,7 @@ print(f"{energia:.2f} kWh | R$ {custo:.2f}")  # 0.05 kWh | R$ 0.06
 ├── README.md
 ├── package.json
 ├── src/            # código-fonte da aplicação (telas /motorista e /admin)
-├── docs/
-│   ├── diagramas/  # diagrama de blocos (PNG e SVG)
-│   └── prints/     # imagens do protótipo
+├── docs/           # diagrama de blocos e prints do protótipo
 └── ...             # demais arquivos de configuração do projeto
 ```
 
