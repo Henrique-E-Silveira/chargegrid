@@ -42,6 +42,8 @@ export const Route = createFileRoute("/painel")({
         property: "og:description",
         content: "Sessão de recarga em tempo real, histórico e economia do motorista.",
       },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: UserPanel,
