@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as PainelRouteImport } from './routes/painel'
+import { Route as OperadorRouteImport } from './routes/operador'
 import { Route as MotoristaRouteImport } from './routes/motorista'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
@@ -23,6 +24,11 @@ const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
 const PainelRoute = PainelRouteImport.update({
   id: '/painel',
   path: '/painel',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OperadorRoute = OperadorRouteImport.update({
+  id: '/operador',
+  path: '/operador',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MotoristaRoute = MotoristaRouteImport.update({
@@ -45,6 +51,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/motorista': typeof MotoristaRoute
+  '/operador': typeof OperadorRoute
   '/painel': typeof PainelRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
 }
@@ -52,6 +59,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/motorista': typeof MotoristaRoute
+  '/operador': typeof OperadorRoute
   '/painel': typeof PainelRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
 }
@@ -60,21 +68,36 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/motorista': typeof MotoristaRoute
+  '/operador': typeof OperadorRoute
   '/painel': typeof PainelRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/admin' | '/motorista' | '/painel' | '/sitemap.xml'
+  fullPaths:
+    | '/'
+    | '/admin'
+    | '/motorista'
+    | '/operador'
+    | '/painel'
+    | '/sitemap.xml'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/admin' | '/motorista' | '/painel' | '/sitemap.xml'
-  id: '__root__' | '/' | '/admin' | '/motorista' | '/painel' | '/sitemap.xml'
+  to: '/' | '/admin' | '/motorista' | '/operador' | '/painel' | '/sitemap.xml'
+  id:
+    | '__root__'
+    | '/'
+    | '/admin'
+    | '/motorista'
+    | '/operador'
+    | '/painel'
+    | '/sitemap.xml'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
   MotoristaRoute: typeof MotoristaRoute
+  OperadorRoute: typeof OperadorRoute
   PainelRoute: typeof PainelRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
 }
@@ -93,6 +116,13 @@ declare module '@tanstack/react-router' {
       path: '/painel'
       fullPath: '/painel'
       preLoaderRoute: typeof PainelRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/operador': {
+      id: '/operador'
+      path: '/operador'
+      fullPath: '/operador'
+      preLoaderRoute: typeof OperadorRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/motorista': {
@@ -123,6 +153,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
   MotoristaRoute: MotoristaRoute,
+  OperadorRoute: OperadorRoute,
   PainelRoute: PainelRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
 }
