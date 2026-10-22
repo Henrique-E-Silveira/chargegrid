@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Activity,
@@ -294,6 +294,9 @@ function Dashboard() {
               <Clock3 size={15} className="text-muted-foreground" />
               {now ? now.toLocaleTimeString("pt-BR") : "--:--:--"}
             </div>
+            <Button variant="outline" size="sm" asChild>
+              <Link to="/operador"><Gauge size={15} /><span className="hidden sm:inline">Operador</span></Link>
+            </Button>
             <Button variant="outline" size="sm" onClick={handleSignOut}>
               <LogOut size={15} />
               Sair

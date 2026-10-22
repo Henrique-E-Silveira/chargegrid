@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { CarFront, KeyRound, Lock, User, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,8 @@ export const Route = createFileRoute("/")({
         property: "og:description",
         content: "Login de administradores e motoristas da rede de eletropostos ChargeGrid.",
       },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: AuthPage,
@@ -155,7 +157,7 @@ function AuthPage() {
             </Button>
           </form>
 
-          <div className="mt-4 border-t border-border pt-4">
+          <div className="mt-4 space-y-2 border-t border-border pt-4">
             <Button
               type="button"
               variant="outline"
@@ -163,6 +165,9 @@ function AuthPage() {
               onClick={() => navigate({ to: "/motorista" })}
             >
               Entrar como motorista (sem login)
+            </Button>
+            <Button variant="ghost" className="w-full" asChild>
+              <Link to="/operador"><Zap size={16} />Centro de Controle · Operador</Link>
             </Button>
           </div>
 

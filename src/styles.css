@@ -167,6 +167,17 @@
   button, a { -webkit-tap-highlight-color: transparent; }
 }
 
+.operator-progress {
+  appearance: none;
+  border: none;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--muted);
+}
+.operator-progress::-webkit-progress-bar { background: var(--muted); }
+.operator-progress::-webkit-progress-value { background: var(--success); }
+.operator-progress::-moz-progress-bar { background: var(--success); }
+
 @utility panel-glow {
   box-shadow: 0 18px 50px -32px color-mix(in oklab, var(--primary) 38%, transparent), inset 0 1px color-mix(in oklab, var(--foreground) 4%, transparent);
 }
